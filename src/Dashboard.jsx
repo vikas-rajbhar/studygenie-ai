@@ -9,83 +9,44 @@ import Profile from "./Profile";
 import Progress from "./Progress";
 import Quiz from "./Quiz";
 
+const defaultProfile = {
+  name: "Student",
+  email: "student@example.com",
+  learningMode: "Student",
+  subjects: [],
+};
+
+function readStoredValue(key, fallback) {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function Dashboard({ onLogout }) {
   const [activePage, setActivePage] = useState("dashboard");
 
-  const [notes, setNotes] = useState([]);
-  const [quizHistory, setQuizHistory] = useState([]);
-
-  const [profile, setProfile] = useState({
-    name: "Student",
-    email: "student@example.com",
-    learningMode: "Student",
-    subjects: [],
-  });
-
-  const [photo, setPhoto] = useState("");
+  const [notes, setNotes] = useState(() => readStoredValue("studygenieNotes", []));
+  const [quizHistory, setQuizHistory] = useState(() => readStoredValue("quizHistory", []));
+  const [profile, setProfile] = useState(() => readStoredValue("studygenieProfile", defaultProfile));
 
   useEffect(() => {
-    loadDashboardData();
+    const loadDashboardData = () => {
+      setNotes(readStoredValue("studygenieNotes", []));
+      setQuizHistory(readStoredValue("quizHistory", []));
+      setProfile(readStoredValue("studygenieProfile", defaultProfile));
+    };
 
     window.addEventListener("studygenie-update", loadDashboardData);
     window.addEventListener("storage", loadDashboardData);
 
     return () => {
-      window.removeEventListener(
-        "studygenie-update",
-        loadDashboardData
-      );
-
-      window.removeEventListener(
-        "storage",
-        loadDashboardData
-      );
+      window.removeEventListener("studygenie-update", loadDashboardData);
+      window.removeEventListener("storage", loadDashboardData);
     };
   }, []);
-
-  const loadDashboardData = () => {
-    const savedNotes = localStorage.getItem("studygenieNotes");
-
-    if (savedNotes) {
-      try {
-        setNotes(JSON.parse(savedNotes));
-      } catch {
-        setNotes([]);
-      }
-    } else {
-      setNotes([]);
-    }
-
-    const savedHistory = localStorage.getItem("quizHistory");
-
-    if (savedHistory) {
-      try {
-        setQuizHistory(JSON.parse(savedHistory));
-      } catch {
-        setQuizHistory([]);
-      }
-    } else {
-      setQuizHistory([]);
-    }
-
-    const savedProfile =
-      localStorage.getItem("studygenieProfile");
-
-    if (savedProfile) {
-      try {
-        setProfile(JSON.parse(savedProfile));
-      } catch {
-        setProfile({
-          name: "Student",
-          email: "student@example.com",
-          learningMode: "Student",
-          subjects: [],
-        });
-      }
-    }
-
-    setPhoto(localStorage.getItem("profilePhoto") || "");
-  };
 
   const topicsStudied = notes.length;
   const quizzesCompleted = quizHistory.length;
@@ -109,101 +70,6 @@ function Dashboard({ onLogout }) {
           )
         )
       : 0;
-
-  const getDateKey = (date) => {
-    return `${date.getFullYear()}-${String(
-      date.getMonth() + 1
-    ).padStart(2, "0")}-${String(
-      date.getDate()
-    ).padStart(2, "0")}`;
-  };
-
-  const getQuizDateKey = (quiz) => {
-    if (!quiz.date) {
-      return null;
-    }
-
-    const parts = quiz.date.split("/");
-
-    if (parts.length !== 3) {
-      return null;
-    }
-
-    const month = Number(parts[0]);
-    const day = Number(parts[1]);
-    const year = Number(parts[2]);
-
-    if (!month || !day || !year) {
-      return null;
-    }
-
-    return getDateKey(
-      new Date(year, month - 1, day)
-    );
-  };
-
-  const activityDates = [
-    ...new Set(
-      quizHistory
-        .map(getQuizDateKey)
-        .filter(Boolean)
-    ),
-  ];
-
-  const calculateStreak = () => {
-    if (activityDates.length === 0) {
-      return 0;
-    }
-
-    const today = new Date();
-
-    today.setHours(0, 0, 0, 0);
-
-    const todayKey = getDateKey(today);
-
-    const yesterday = new Date(today);
-
-    yesterday.setDate(
-      yesterday.getDate() - 1
-    );
-
-    const yesterdayKey = getDateKey(yesterday);
-
-    if (
-      !activityDates.includes(todayKey) &&
-      !activityDates.includes(yesterdayKey)
-    ) {
-      return 0;
-    }
-
-    let streak = 0;
-
-    const currentDate = new Date(today);
-
-    if (!activityDates.includes(todayKey)) {
-      currentDate.setDate(
-        currentDate.getDate() - 1
-      );
-    }
-
-    while (true) {
-      const key = getDateKey(currentDate);
-
-      if (!activityDates.includes(key)) {
-        break;
-      }
-
-      streak++;
-
-      currentDate.setDate(
-        currentDate.getDate() - 1
-      );
-    }
-
-    return streak;
-  };
-
-  const learningStreak = calculateStreak();
 
   const latestQuiz =
     quizHistory.length > 0

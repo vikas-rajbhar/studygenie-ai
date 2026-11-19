@@ -30,15 +30,15 @@ function DashboardLayout({
     }
   };
 
-  let profile = {};
-
-  try {
-    profile = JSON.parse(
-      localStorage.getItem("studygenieProfile") || '{"name":"Student"}'
-    );
-  } catch {
-    profile = { name: "Student" };
-  }
+  const profile = (() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("studygenieProfile") || '{"name":"Student"}'
+      );
+    } catch {
+      return { name: "Student" };
+    }
+  })();
 
   return (
     <div

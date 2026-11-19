@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import "./Profile.css";
 
-function Profile({ onBack, onLogout }) {
+function Profile({ onLogout }) {
   const defaultProfile = {
     name: "Student",
     email: "student@example.com",

@@ -3,13 +3,13 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 
-dotenv.config();
+dotenv.config({ path: new URL("./.env", import.meta.url) });
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "32kb" }));
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -18,12 +18,7 @@ console.log(
   GEMINI_API_KEY ? "YES" : "NO"
 );
 
-if (!GEMINI_API_KEY) {
-  console.log("ERROR: GEMINI_API_KEY is missing");
-  process.exit(1);
-}
-
-const ai = new GoogleGenAI({
+const ai = GEMINI_API_KEY ? new GoogleGenAI({
   apiKey: GEMINI_API_KEY,
   httpOptions: {
     timeout: 30000,
@@ -31,7 +26,7 @@ const ai = new GoogleGenAI({
       attempts: 2,
     },
   },
-});
+}) : null;
 
 const systemInstruction = `
 You are StudyGenie AI, a student learning assistant.
@@ -76,6 +71,10 @@ function isTemporaryError(error) {
 }
 
 async function generateAIResponse(contents, maxOutputTokens = 1000) {
+  if (!ai) {
+    throw new Error("AI is not configured. Add GEMINI_API_KEY to Backend/.env.");
+  }
+
   let lastError;
 
   for (const model of models) {
@@ -147,41 +146,86 @@ app.get("/api/test", async (req, res) => {
 
     res.status(503).json({
       success: false,
-      error:
-        "AI service is temporarily unavailable. Please try again.",
+      error: !GEMINI_API_KEY
+        ? "AI is not configured. Add GEMINI_API_KEY to Backend/.env."
+        : "AI service is temporarily unavailable. Please try again.",
     });
   }
 });
 
 app.post("/api/chat", async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, history = [] } = req.body ?? {};
 
-    if (!message || !message.trim()) {
+    if (typeof message !== "string" || !message.trim()) {
       return res.status(400).json({
         success: false,
         error: "Message is required",
       });
     }
 
-    console.log("Question:", message);
+    const cleanMessage = message.trim();
+    if (cleanMessage.length > 8000) {
+      return res.status(413).json({
+        success: false,
+        error: "Message is too long. Keep it under 8,000 characters.",
+      });
+    }
+
+    if (!Array.isArray(history) || history.length > 20) {
+      return res.status(400).json({
+        success: false,
+        error: "Conversation history must contain at most 20 messages.",
+      });
+    }
+
+    const contents = [];
+    for (const item of history) {
+      if (
+        !item ||
+        !["user", "ai", "model"].includes(item.type) ||
+        typeof item.text !== "string" ||
+        !item.text.trim() ||
+        item.text.length > 8000
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "Conversation history contains an invalid message.",
+        });
+      }
+
+      const role = item.type === "user" ? "user" : "model";
+      const previous = contents.at(-1);
+      if (previous?.role === role) {
+        previous.parts[0].text += `\n\n${item.text.trim()}`;
+      } else {
+        contents.push({ role, parts: [{ text: item.text.trim() }] });
+      }
+    }
+
+    // Gemini expects a user turn first and the current prompt after a user turn.
+    while (contents[0]?.role === "model") contents.shift();
+    while (contents.at(-1)?.role === "model") contents.pop();
+    contents.push({ role: "user", parts: [{ text: cleanMessage }] });
 
     const response = await generateAIResponse(
-      message.trim(),
+      contents,
       1000
     );
 
+    if (!response.text?.trim()) throw new Error("AI returned an empty response");
     res.json({
       success: true,
       reply: response.text,
     });
   } catch (error) {
-    console.error("CHAT ERROR:", error);
+    console.error("CHAT ERROR:", error?.message || "Unknown AI service error");
 
     res.status(503).json({
       success: false,
-      error:
-        "AI service is temporarily unavailable. Please try again.",
+      error: !GEMINI_API_KEY
+        ? "AI is not configured. Add GEMINI_API_KEY to Backend/.env."
+        : "AI service is temporarily unavailable. Please try again.",
     });
   }
 });

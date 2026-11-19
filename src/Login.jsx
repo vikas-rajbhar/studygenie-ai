@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./Login.css";
 
 function Login({ onBack, onLogin }) {
   const [isSignup, setIsSignup] = useState(false);
   const googleButtonRef = useRef(null);
+  const googleResponseHandlerRef = useRef(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -29,7 +30,7 @@ function Login({ onBack, onLogin }) {
 
       window.google.accounts.id.initialize({
         client_id: clientId,
-        callback: handleGoogleResponse,
+        callback: (response) => googleResponseHandlerRef.current?.(response),
       });
 
       googleButtonRef.current.innerHTML = "";
@@ -107,7 +108,7 @@ function Login({ onBack, onLogin }) {
     }
   };
 
-  const handleGoogleResponse = (response) => {
+  const handleGoogleResponse = useCallback((response) => {
     if (!response.credential) {
       alert("Google login failed.");
       return;
@@ -148,7 +149,11 @@ function Login({ onBack, onLogin }) {
       photoURL: user.picture || "",
       credential: response.credential,
     });
-  };
+  }, [onLogin]);
+
+  useEffect(() => {
+    googleResponseHandlerRef.current = handleGoogleResponse;
+  }, [handleGoogleResponse]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

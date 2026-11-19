@@ -214,7 +214,7 @@ function AIAssistant() {
     try {
       const API_URL =
         import.meta.env.VITE_API_URL ||
-        "http://localhost:5000";
+        "http://localhost:5050";
 
       const response = await fetch(
         `${API_URL}/api/chat`,
@@ -225,6 +225,13 @@ function AIAssistant() {
           },
           body: JSON.stringify({
             message: text,
+            history: messages
+              .slice(1)
+              .filter((message) =>
+                ["user", "ai"].includes(message.type) &&
+                typeof message.text === "string"
+              )
+              .slice(-20),
           }),
         }
       );
@@ -257,14 +264,16 @@ function AIAssistant() {
 
       const errorMessage = {
         type: "ai",
-        text:
-          "Sorry, I couldn't connect to the AI server. Please try again.",
+        text: error.message?.includes("GEMINI_API_KEY")
+          ? error.message
+          : "Sorry, I couldn't connect to the AI server. Please try again.",
       };
 
-      setMessages((prev) => [
-        ...prev,
-        errorMessage,
-      ]);
+      setMessages((prev) => {
+        const updated = [...prev, errorMessage];
+        localStorage.setItem("studygenieChat", JSON.stringify(updated));
+        return updated;
+      });
     } finally {
       setLoading(false);
     }
